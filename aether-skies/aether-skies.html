@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aether · Skies &amp; Weather · 手绘气象台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400..800&family=Fraunces:ital,opsz,wght@1,9..144,400..700&family=Quicksand:wght@400..700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   AETHER · Skies & Weather
+   Hand-drawn storybook skies — single file, no external data.
+   ============================================================ */
+
+/* ---------- Design tokens ---------- */
+:root{
+  --ink:        #34435e;
+  --ink-soft:   #64748f;
+  --ink-faint:  #97a4ba;
+  --paper:      #fffdf8;
+
+  --sky-top:    #eaf4ff;
+  --sky-mid:    #f0f1ff;
+  --sky-bot:    #fdf3ec;
+
+  --line:       rgba(52,67,94,.10);
+  --line-soft:  rgba(52,67,94,.06);
+
+  --shadow-rest: 0 2px 4px rgba(52,67,94,.04), 0 10px 26px -12px rgba(52,67,94,.14);
+  --shadow-lift: 0 4px 8px rgba(52,67,94,.05), 0 26px 46px -18px rgba(52,67,94,.26);
+
+  --ease-out-quart: cubic-bezier(.25,1,.5,1);
+  --ease-out-expo:  cubic-bezier(.16,1,.3,1);
+  --ease-in-out:    cubic-bezier(.65,0,.35,1);
+
+  --font-display: 'Fraunces', 'Songti SC', Georgia, serif;
+  --font-body:    'Quicksand', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-num:     'Baloo 2', 'Quicksand', system-ui, sans-serif;
+  --font-cn:      'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  --scene-h: 150px;
+  --card-r: 28px 32px 26px 30px / 30px 26px 32px 28px;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html{ -webkit-text-size-adjust:100%; }
+
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:var(--font-body);
+  color:var(--ink);
+  background:linear-gradient(180deg,var(--sky-top) 0%, var(--sky-mid) 46%, var(--sky-bot) 100%);
+  background-attachment:fixed;
+  overflow-x:hidden;
+  font-kerning:normal;
+}
+
+/* ---------- Ambient dreamy backdrop ---------- */
+.ambient{ position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
+.blob{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; }
+.blob.b1{ width:44vw; height:44vw; left:-12vw; top:-8vw;  background:radial-gradient(circle,rgba(173,205,255,.75),transparent 68%); animation:float1 34s var(--ease-in-out) infinite; }
+.blob.b2{ width:38vw; height:38vw; right:-10vw; top:14vw; background:radial-gradient(circle,rgba(255,214,201,.62),transparent 68%); animation:float2 42s var(--ease-in-out) infinite; }
+.blob.b3{ width:52vw; height:40vw; left:18vw; bottom:-14vw; background:radial-gradient(circle,rgba(214,232,255,.7),transparent 70%); animation:float1 50s var(--ease-in-out) infinite reverse; }
+@keyframes float1{ 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(4vw,3vw,0) scale(1.08)} }
+@keyframes float2{ 0%,100%{transform:translate3d(0,0,0) scale(1.05)} 50%{transform:translate3d(-5vw,4vw,0) scale(.94)} }
+
+/* ambient drifting doodle clouds */
+.doodle{ position:absolute; opacity:.30; color:#fff; }
+.doodle svg{ width:100%; height:auto; display:block; }
+.doodle.d1{ width:min(340px,42vw); top:16vh; left:-6vw;  animation:pass 96s linear infinite; }
+.doodle.d2{ width:min(240px,32vw); top:38vh; right:-8vw; animation:pass 128s linear infinite reverse; }
+.doodle.d3{ width:min(180px,26vw); top:66vh; left:12vw;  animation:pass 150s linear infinite; }
+@keyframes pass{ from{transform:translateX(-24vw)} to{transform:translateX(124vw)} }
+
+/* paper grain */
+.grain{
+  position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.13; mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.sprite-defs{ position:absolute; top:0; left:0; width:0; height:0; overflow:hidden; pointer-events:none; }
+
+/* ---------- Layout ---------- */
+.wrap{ position:relative; z-index:2; width:min(1180px,92vw); margin:0 auto; padding:clamp(36px,7vh,84px) 0 0; }
+
+/* ---------- Hero ---------- */
+.hero{ text-align:center; margin-bottom:clamp(26px,4vh,44px); }
+.hero-doodle{ width:112px; margin:0 auto 6px; display:block; overflow:visible; color:#8fb6dd; }
+.hero-doodle .hd-ray{ transform-origin:56px 40px; animation:spin 90s linear infinite; }
+.hero-doodle .hd-cloud{ animation:bob 9s var(--ease-in-out) infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes bob{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-5px) } }
+
+.hero h1{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-weight:600;
+  font-size:clamp(3.4rem,11vw,7rem);
+  line-height:.92;
+  margin:0;
+  letter-spacing:-.025em;
+  background:linear-gradient(174deg,#3d4f70 8%,#6d86b4 58%,#9aa6c9 100%);
+  -webkit-background-clip:text; background-clip:text;
+  color:transparent;
+  -webkit-text-fill-color:transparent;
+}
+.hero .sub{
+  font-family:var(--font-display);
+  font-style:italic;
+  font-size:clamp(.95rem,2.4vw,1.35rem);
+  letter-spacing:.30em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  margin:.85em 0 0 .30em;
+}
+.hero .cn{
+  font-family:var(--font-cn);
+  font-size:clamp(.9rem,2.2vw,1.05rem);
+  color:var(--ink-faint);
+  margin:.9em 0 0;
+  letter-spacing:.04em;
+}
+.hero .rise{ animation:riseIn .9s var(--ease-out-expo) both; }
+.hero .rise:nth-child(2){ animation-delay:.08s }
+.hero .rise:nth-child(3){ animation-delay:.16s }
+.hero .rise:nth-child(4){ animation-delay:.24s }
+@keyframes riseIn{ from{ opacity:0; transform:translateY(16px) } to{ opacity:1; transform:none } }
+
+/* ---------- Toolbar ---------- */
+.toolbar{
+  display:flex; gap:12px; align-items:flex-start;
+  max-width:560px; margin:0 auto clamp(24px,4vh,40px);
+  position:relative;
+}
+.search{
+  position:relative; flex:1 1 auto; min-width:0;
+}
+.search-shell{
+  display:flex; align-items:center; gap:10px;
+  background:rgba(255,255,255,.72);
+  border:1.5px solid var(--line);
+  border-radius:20px 22px 20px 24px / 24px 20px 24px 20px;
+  padding:11px 16px;
+  box-shadow:var(--shadow-rest);
+  transition:box-shadow .28s var(--ease-out-quart), transform .28s var(--ease-out-quart), background .28s;
+}
+.search-shell:focus-within{
+  box-shadow:0 0 0 4px rgba(126,160,214,.16), var(--shadow-lift);
+  transform:translateY(-1px);
+  background:rgba(255,255,255,.9);
+}
+.search-shell svg{ width:17px; height:17px; flex:none; color:var(--ink-faint); }
+#q{
+  flex:1 1 auto; min-width:0; border:0; outline:0; background:transparent;
+  font-family:var(--font-body); font-size:.95rem; font-weight:600; color:var(--ink);
+}
+#q::placeholder{ color:var(--ink-faint); font-weight:500; }
+
+.suggest{
+  position:absolute; left:0; right:0; top:calc(100% + 8px);
+  margin:0; padding:6px; list-style:none; z-index:40;
+  background:rgba(255,255,255,.96);
+  border:1.5px solid var(--line);
+  border-radius:18px 20px 18px 22px / 22px 18px 22px 18px;
+  box-shadow:0 20px 44px -18px rgba(52,67,94,.36);
+  max-height:330px; overflow:auto;
+  animation:sugIn .26s var(--ease-out-expo) both;
+}
+.suggest[hidden]{ display:none; }
+@keyframes sugIn{ from{ opacity:0; transform:translateY(-8px) } to{ opacity:1; transform:none } }
+.suggest li{
+  display:flex; align-items:center; gap:10px;
+  padding:9px 12px; border-radius:13px; cursor:pointer;
+  transition:background .16s;
+}
+.suggest li:hover, .suggest li.on{ background:linear-gradient(90deg,rgba(199,220,255,.5),rgba(255,236,224,.5)); }
+.suggest .s-cn{ font-family:var(--font-cn); font-size:1rem; }
+.suggest .s-en{ font-size:.78rem; color:var(--ink-soft); letter-spacing:.06em; }
+.suggest .s-w{ margin-left:auto; font-size:.72rem; color:var(--ink-faint); white-space:nowrap; }
+.suggest mark{ background:rgba(255,214,150,.55); color:inherit; border-radius:3px; padding:0 1px; }
+.suggest .empty{ color:var(--ink-faint); justify-content:center; font-size:.86rem; cursor:default; }
+.suggest .empty:hover{ background:transparent; }
+
+.lang{
+  flex:none; font-family:var(--font-body); font-weight:700; font-size:.82rem; letter-spacing:.08em;
+  color:var(--ink); background:rgba(255,255,255,.72);
+  border:1.5px solid var(--line);
+  border-radius:18px 20px 16px 22px / 22px 16px 20px 18px;
+  padding:12px 15px; cursor:pointer; box-shadow:var(--shadow-rest);
+  transition:transform .2s var(--ease-out-quart), box-shadow .2s, background .2s;
+}
+.lang:hover{ transform:translateY(-2px); box-shadow:var(--shadow-lift); background:#fff; }
+.lang:active{ transform:translateY(0); }
+
+/* ---------- Grid ---------- */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(min(280px,100%), 1fr));
+  gap:clamp(16px,2.2vw,26px);
+  padding-bottom:clamp(30px,6vh,60px);
+}
+
+/* ---------- Card ---------- */
+.card{
+  position:relative;
+  container-type:inline-size;
+  background:var(--paper);
+  border:1.5px solid var(--line);
+  border-radius:var(--card-r);
+  box-shadow:var(--shadow-rest);
+  overflow:hidden;
+  cursor:pointer;
+  outline:none;
+  transition:transform .34s var(--ease-out-quart), box-shadow .34s var(--ease-out-quart), opacity .24s linear;
+  -webkit-tap-highlight-color:transparent;
+}
+.card:hover, .card:focus-visible{ transform:translateY(-7px); box-shadow:var(--shadow-lift); }
+.card:focus-visible{ border-color:rgba(110,150,214,.75); }
+.card.is-new{ animation:cardIn .62s var(--ease-out-expo) both; animation-delay:calc(var(--i,0) * 65ms); }
+@keyframes cardIn{ from{ opacity:0; transform:translateY(26px) scale(.985) } to{ opacity:1; transform:none } }
+.card.leaving{ animation:cardOut .26s cubic-bezier(.7,0,.84,0) forwards; pointer-events:none; }
+@keyframes cardOut{ to{ opacity:0; transform:translateY(-10px) scale(.94) } }
+.card.paused, .card.paused *{ animation-play-state:paused !important; }
+
+/* ripple */
+.ripple{
+  position:absolute; border-radius:50%; pointer-events:none; z-index:6;
+  background:radial-gradient(circle, rgba(96,132,196,.32), rgba(96,132,196,0) 68%);
+  transform:translate(-50%,-50%) scale(0);
+  animation:rippleOut .68s var(--ease-out-quart) forwards;
+}
+@keyframes rippleOut{ to{ transform:translate(-50%,-50%) scale(1); opacity:0 } }
+
+/* delete */
+.del{
+  position:absolute; top:11px; right:12px; z-index:7;
+  width:29px; height:29px; display:grid; place-items:center;
+  border:1.5px solid rgba(52,67,94,.14); border-radius:50%;
+  background:rgba(255,255,255,.92); color:var(--ink-soft);
+  font-size:.72rem; line-height:1; cursor:pointer; padding:0;
+  opacity:0; transform:scale(.8) translateY(-3px);
+  transition:opacity .22s var(--ease-out-quart), transform .22s var(--ease-out-expo), background .18s, color .18s;
+}
+.card:hover .del, .card:focus-within .del, .del:focus-visible{ opacity:1; transform:none; }
+.del:hover{ background:#fff1ef; color:#d4644f; border-color:rgba(212,100,79,.4); }
+@media (hover:none){ .del{ opacity:1; transform:none; } }
+
+/* ---------- Scene ---------- */
+.scene{
+  position:relative; height:var(--scene-h); overflow:hidden;
+  border-radius:26px 30px 4px 4px / 28px 24px 4px 4px;
+  isolation:isolate;
+}
+.sky{ position:absolute; inset:0; z-index:0; }
+.art{ position:absolute; inset:0; width:100%; height:100%; z-index:2; }
+.fx{ position:absolute; inset:0; z-index:3; pointer-events:none; }
+.flash{ position:absolute; inset:0; z-index:4; background:#fff; opacity:0; pointer-events:none; }
+
+.local{
+  position:absolute; z-index:5; top:11px; left:13px;
+  font-size:.66rem; font-weight:700; letter-spacing:.10em;
+  padding:4px 9px; border-radius:99px;
+  background:var(--pill,rgba(255,255,255,.42));
+  color:var(--on-scene,#34435e);
+  border:1px solid var(--pill-bd,rgba(255,255,255,.62));
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+
+/* per-weather skies */
+.card[data-w="sunny"]  { --on-scene:#5a4a2c; --pill:rgba(255,255,255,.46); --pill-bd:rgba(255,255,255,.7); }
+.card[data-w="sunny"]  .sky{ background:linear-gradient(180deg,#9ed7ff 0%,#cdeaff 44%,#ffe8bd 100%); }
+.card[data-w="cloudy"] { --on-scene:#3c4a63; --pill:rgba(255,255,255,.5);  --pill-bd:rgba(255,255,255,.7); }
+.card[data-w="cloudy"] .sky{ background:linear-gradient(180deg,#a9bfd9 0%,#cdd8e6 52%,#e9e5e8 100%); }
+.card[data-w="rain"]   { --on-scene:#31445f; --pill:rgba(255,255,255,.5);  --pill-bd:rgba(255,255,255,.66); }
+.card[data-w="rain"]   .sky{ background:linear-gradient(180deg,#8298b3 0%,#aec0d2 52%,#d5dade 100%); }
+.card[data-w="snow"]   { --on-scene:#3f4c66; --pill:rgba(255,255,255,.56); --pill-bd:rgba(255,255,255,.75); }
+.card[data-w="snow"]   .sky{ background:linear-gradient(180deg,#b9cdea 0%,#dee7f5 48%,#f5f2f8 100%); }
+.card[data-w="thunder"]{ --on-scene:#eef2fb; --pill:rgba(10,16,38,.34);   --pill-bd:rgba(255,255,255,.24); }
+.card[data-w="thunder"] .sky{ background:linear-gradient(180deg,#4e5a7c 0%,#75819f 48%,#a3a9bb 100%); }
+.card[data-w="mist"]   { --on-scene:#4a5668; --pill:rgba(255,255,255,.58); --pill-bd:rgba(255,255,255,.78); }
+.card[data-w="mist"]   .sky{ background:linear-gradient(180deg,#d3dde7 0%,#eaedf0 52%,#f8f1e9 100%); }
+.card[data-w="night"]  { --on-scene:#e7ecfb; --pill:rgba(10,16,38,.38);   --pill-bd:rgba(255,255,255,.22); }
+.card[data-w="night"]  .sky{ background:linear-gradient(180deg,#222c58 0%,#3d4a7c 44%,#7a7faa 100%); }
+
+/* hills + cloud tint per weather */
+.card[data-w="sunny"]  { --hill1:#c6ddc0; --hill2:#a9cda5; --cl:#ffffff; }
+.card[data-w="cloudy"] { --hill1:#b6c4d3; --hill2:#9fb0c2; --cl:#ffffff; }
+.card[data-w="rain"]   { --hill1:#a8b8c8; --hill2:#8fa3b7; --cl:#e8eef5; }
+.card[data-w="snow"]   { --hill1:#e2eaf6; --hill2:#cdd9ec; --cl:#ffffff; }
+.card[data-w="thunder"]{ --hill1:#7e88a1; --hill2:#666f88; --cl:#c3cadb; }
+.card[data-w="mist"]   { --hill1:#dbe2e8; --hill2:#c9d2da; --cl:#ffffff; }
+.card[data-w="night"]  { --hill1:#2c3560; --hill2:#1f2649; --cl:#5c6693; }
+
+/* ---------- Clouds (zones + phase-offset drift) ---------- */
+.cloud{
+  position:absolute; left:0; top:var(--top); width:var(--w);
+  aspect-ratio:220/100;
+  color:var(--cl);
+  opacity:var(--op,1);
+  animation:drift var(--dur) linear infinite;
+  animation-delay:var(--ph);
+  will-change:transform;
+}
+.cloud svg{ width:100%; height:100%; display:block; filter:url(#rough); }
+@keyframes drift{ from{ transform:translate3d(-130%,0,0) } to{ transform:translate3d(330%,0,0) } }
+
+/* ---------- Sun / moon ---------- */
+.sun .rays line{ stroke:#ffcf6b; stroke-width:2.6; stroke-linecap:round; opacity:.8; }
+.sun .rays{ animation:spin 82s linear infinite; }
+.sun .glow{ animation:breathe 6.4s var(--ease-in-out) infinite; }
+@keyframes breathe{ 0%,100%{ transform:scale(1); opacity:.5 } 50%{ transform:scale(1.14); opacity:.85 } }
+.moon .mbody{ animation:moonBob 11s var(--ease-in-out) infinite; }
+@keyframes moonBob{ 0%,100%{ transform:translateY(0) rotate(-3deg) } 50%{ transform:translateY(-5px) rotate(2deg) } }
+.moon .mglow{ animation:breathe 8s var(--ease-in-out) infinite; }
+
+/* ---------- Weather particles ---------- */
+.drop{
+  position:absolute; top:-16px; width:1.6px; border-radius:2px;
+  background:linear-gradient(180deg,rgba(255,255,255,0),rgba(232,242,255,.95));
+  animation:rainfall linear infinite;
+}
+@keyframes rainfall{ from{ transform:translate3d(0,0,0) } to{ transform:translate3d(-13px,178px,0) } }
+
+.flake{
+  position:absolute; top:0; border-radius:50%;
+  background:radial-gradient(circle at 35% 32%, #fff, rgba(255,255,255,.35) 62%, rgba(255,255,255,0) 75%);
+  animation:snowfall ease-in-out infinite;
+}
+@keyframes snowfall{
+  0%{ transform:translate3d(0,-14px,0) }
+  50%{ transform:translate3d(var(--sw,10px),72px,0) }
+  100%{ transform:translate3d(0,162px,0) }
+}
+
+.band{
+  position:absolute; left:-32%; width:164%; height:var(--h);
+  top:var(--top); border-radius:50%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.92) 30%,rgba(255,255,255,.75) 60%,transparent);
+  filter:blur(7px); opacity:var(--op);
+  animation:mistDrift var(--dur) var(--ease-in-out) infinite alternate;
+  animation-delay:var(--ph);
+}
+@keyframes mistDrift{ from{ transform:translateX(-5%) scaleY(1) } to{ transform:translateX(5%) scaleY(1.18) } }
+
+.mote{
+  position:absolute; bottom:0; border-radius:50%;
+  background:radial-gradient(circle,rgba(255,236,190,.95),rgba(255,236,190,0) 70%);
+  animation:moteRise var(--dur) linear infinite;
+  animation-delay:var(--ph);
+}
+@keyframes moteRise{
+  0%{ transform:translate3d(0,10px,0) scale(.5); opacity:0 }
+  22%{ opacity:.9 }
+  100%{ transform:translate3d(var(--mx,8px),-90px,0) scale(1.15); opacity:0 }
+}
+
+.star{
+  position:absolute; width:var(--s); height:var(--s); border-radius:50%;
+  background:#fff; animation:twinkle var(--d) var(--ease-in-out) infinite;
+  animation-delay:var(--ph);
+}
+.star.spark{
+  border-radius:0; background:#fff;
+  clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%);
+}
+@keyframes twinkle{ 0%,100%{ opacity:.22; transform:scale(.72) } 50%{ opacity:1; transform:scale(1.12) } }
+
+.shoot{
+  position:absolute; width:64px; height:1.6px; border-radius:2px;
+  background:linear-gradient(90deg,rgba(255,255,255,0),#fff);
+  transform:rotate(24deg);
+  animation:shoot 11s var(--ease-in-out) infinite;
+  animation-delay:var(--ph);
+}
+@keyframes shoot{
+  0%,72%{ opacity:0; transform:translate3d(0,0,0) rotate(24deg) scaleX(.2) }
+  76%{ opacity:1 }
+  84%{ opacity:0; transform:translate3d(150px,66px,0) rotate(24deg) scaleX(1) }
+  100%{ opacity:0; transform:translate3d(150px,66px,0) rotate(24deg) scaleX(1) }
+}
+
+.bolt{ animation:boltFlash var(--dur) steps(1,end) infinite; animation-delay:var(--ph); }
+@keyframes boltFlash{
+  0%,84%,100%{ opacity:0 }
+  85%{ opacity:1 } 87%{ opacity:.15 } 89%{ opacity:.95 } 91%{ opacity:0 }
+}
+.card[data-w="thunder"] .flash{ animation:skyFlash var(--dur) steps(1,end) infinite; animation-delay:var(--ph); }
+@keyframes skyFlash{
+  0%,84%,100%{ opacity:0 }
+  85.5%{ opacity:.5 } 88%{ opacity:.04 } 90%{ opacity:.34 } 92%{ opacity:0 }
+}
+
+/* ---------- Card body ---------- */
+.body{ padding:16px 18px 18px; position:relative; z-index:2; }
+.row-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.who{ min-width:0; }
+.city-cn{
+  font-family:var(--font-cn); font-weight:400;
+  font-size:1.6rem; line-height:1.15; margin:0;
+  letter-spacing:.03em;
+}
+.city-en{
+  margin:3px 0 0; font-size:.7rem; font-weight:700;
+  letter-spacing:.20em; text-transform:uppercase; color:var(--ink-faint);
+}
+.temp{
+  font-family:var(--font-num); font-weight:700;
+  font-size:3.15rem; line-height:.9; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums; flex:none;
+  color:var(--ink);
+}
+.temp .deg{ font-size:.42em; vertical-align:super; font-weight:600; opacity:.65; }
+@container (max-width:330px){ .temp{ font-size:2.7rem } .city-cn{ font-size:1.45rem } }
+
+.cond{
+  display:flex; align-items:baseline; gap:7px;
+  margin:11px 0 0; padding-top:11px;
+  border-top:1.5px dashed var(--line);
+}
+.cond-cn{ font-family:var(--font-cn); font-size:1rem; letter-spacing:.05em; }
+.cond .dot{ color:var(--ink-faint); font-size:.7rem; }
+.cond-en{ font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); }
+
+.meta{
+  list-style:none; margin:13px 0 0; padding:0;
+  display:grid; grid-template-columns:1fr 1fr; gap:8px 10px;
+}
+.meta li{
+  display:flex; align-items:center; gap:6px;
+  font-size:.76rem; font-weight:600; color:var(--ink-soft);
+  min-width:0;
+}
+.meta svg{ width:14px; height:14px; flex:none; color:var(--ink-faint); }
+.meta .k{ flex:none; }
+.meta b{
+  font-family:var(--font-num); font-weight:700; font-size:.92rem;
+  color:var(--ink); font-variant-numeric:tabular-nums;
+  margin-left:auto; white-space:nowrap;
+}
+
+/* ---------- Empty state ---------- */
+.empty{
+  grid-column:1/-1; text-align:center;
+  padding:clamp(40px,8vh,76px) 20px;
+  border:2px dashed var(--line);
+  border-radius:30px 26px 32px 28px / 28px 32px 26px 30px;
+  background:rgba(255,255,255,.4);
+  animation:cardIn .6s var(--ease-out-expo) both;
+}
+.empty svg{ width:96px; color:#c3d3e8; margin-bottom:6px; }
+.empty h3{ font-family:var(--font-cn); font-weight:400; font-size:1.25rem; margin:8px 0 6px; }
+.empty p{ margin:0; color:var(--ink-faint); font-size:.88rem; }
+
+/* ---------- Footer ---------- */
+footer{
+  text-align:center; padding:0 0 clamp(38px,7vh,72px);
+  font-size:.72rem; color:var(--ink-faint); letter-spacing:.06em; line-height:1.9;
+}
+footer .sep{ opacity:.5; margin:0 .5em; }
+
+/* ---------- Toast ---------- */
+.toast-wrap{
+  position:fixed; z-index:90; left:50%; bottom:26px; transform:translateX(-50%);
+  display:flex; flex-direction:column-reverse; gap:8px; align-items:center;
+  pointer-events:none; width:max-content; max-width:90vw;
+}
+.toast{
+  font-family:var(--font-body); font-size:.84rem; font-weight:600;
+  color:#f3f6fc; background:rgba(48,62,90,.94);
+  padding:10px 18px; border-radius:99px;
+  box-shadow:0 14px 30px -12px rgba(30,42,66,.6);
+  opacity:0; transform:translateY(14px) scale(.96);
+  transition:opacity .3s var(--ease-out-quart), transform .34s var(--ease-out-expo);
+  white-space:nowrap;
+}
+.toast.in{ opacity:1; transform:none; }
+.toast .cn-x{ font-family:var(--font-cn); }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+  .card:hover{ transform:none; }
+  .cloud{ transform:translateX(30%); }
+  .drop,.flake,.mote,.star{ display:none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== SVG sprite: hand-drawn shapes, filters, gradients ===== -->
+<svg class="sprite-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="rough" x="-25%" y="-25%" width="150%" height="150%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.038" numOctaves="1" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+
+    <radialGradient id="sunG">
+      <stop offset="0%"   stop-color="#ffe9a8" stop-opacity=".95"/>
+      <stop offset="55%"  stop-color="#ffd27a" stop-opacity=".38"/>
+      <stop offset="100%" stop-color="#ffc45e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="moonG">
+      <stop offset="0%"   stop-color="#fff6d8" stop-opacity=".85"/>
+      <stop offset="55%"  stop-color="#dfe4ff" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="#c9d2ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="paleG">
+      <stop offset="0%"   stop-color="#fffdf5" stop-opacity=".95"/>
+      <stop offset="60%"  stop-color="#fff3dd" stop-opacity=".35"/>
+      <stop offset="100%" stop-color="#ffe9c9" stop-opacity="0"/>
+    </radialGradient>
+
+    <symbol id="cld-a" viewBox="0 -8 220 106">
+      <path d="M26 84C9 84 2 69 11 58 4 45 16 30 31 33 34 14 55 4 74 13 82 -2 111 -3 122 15 134 4 158 11 163 30 182 23 202 36 199 54 216 59 217 80 199 84Z"/>
+    </symbol>
+    <symbol id="cld-b" viewBox="0 -8 220 106">
+      <path d="M20 78C6 78 0 64 8 54 1 42 13 28 27 31 31 13 49 3 66 11 76 -3 100 -4 111 12 122 2 143 8 149 25 166 19 184 31 182 48 198 53 199 74 182 78Z"/>
+    </symbol>
+    <symbol id="cld-c" viewBox="0 -8 220 108">
+      <path d="M30 86C13 86 6 71 15 61 9 47 23 34 38 38 42 19 63 8 82 19 92 4 119 4 130 21 142 10 165 16 169 35 188 30 205 45 201 63 217 68 216 86 199 86Z"/>
+    </symbol>
+    <symbol id="bolt" viewBox="0 0 60 100">
+      <path d="M38 2 8 56h22L18 98 54 40H31z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="ambient" aria-hidden="true">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <div class="doodle d1"><svg viewBox="0 -8 220 106"><use href="#cld-a"/></svg></div>
+  <div class="doodle d2"><svg viewBox="0 -8 220 106"><use href="#cld-b"/></svg></div>
+  <div class="doodle d3"><svg viewBox="0 -8 220 106"><use href="#cld-c"/></svg></div>
+</div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <svg class="hero-doodle rise" viewBox="0 0 112 74" fill="none" aria-hidden="true">
+      <g class="hd-ray" stroke="#f6c274" stroke-width="2.4" stroke-linecap="round">
+        <line x1="56" y1="12" x2="56" y2="2"/><line x1="86" y1="26" x2="95" y2="19"/>
+        <line x1="94" y1="40" x2="104" y2="40"/><line x1="86" y1="54" x2="95" y2="61"/>
+        <line x1="56" y1="68" x2="56" y2="78"/><line x1="26" y1="54" x2="17" y2="61"/>
+        <line x1="18" y1="40" x2="8" y2="40"/><line x1="26" y1="26" x2="17" y2="19"/>
+      </g>
+      <circle cx="56" cy="40" r="19" fill="#ffd98a"/>
+      <circle cx="56" cy="40" r="19" stroke="#f2ae4c" stroke-width="2.2" fill="none"/>
+      <g transform="translate(24,34) scale(.41)">
+        <g class="hd-cloud" fill="#ffffff">
+          <path d="M30 66C18 66 13 55 20 47 15 37 25 26 36 29 38 14 55 6 70 13 77 0 99 -1 108 14 118 5 137 11 141 27 157 21 173 32 170 45 184 50 185 66 170 66Z"/>
+        </g>
+      </g>
+    </svg>
+    <h1 class="rise">Aether</h1>
+    <p class="sub rise">Skies &amp; Weather</p>
+    <p class="cn rise">手绘气象台 · 把每一座城市的天空，画给你看</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="search">
+      <div class="search-shell">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+        </svg>
+        <input id="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
+               aria-expanded="false" aria-controls="suggest" aria-autocomplete="list">
+      </div>
+      <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+    </div>
+    <button class="lang" id="lang" type="button" aria-label="Switch language">EN</button>
+  </div>
+
+  <main class="grid" id="grid" aria-live="polite"></main>
+
+  <footer>
+    手绘的天空，虚构的天气 · 数据仅为演示
+    <span class="sep">/</span>
+    A hand-drawn sky, an imagined forecast
+    <br>Aether · Skies &amp; Weather · 2026
+  </footer>
+</div>
+
+<div class="toast-wrap" id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   1. Weather dictionary
+   ============================================================ */
+const W = {
+  sunny:   { cn:'晴朗',   en:'Clear',         key:'clear' },
+  cloudy:  { cn:'多云',   en:'Cloudy',        key:'cloudy' },
+  rain:    { cn:'小雨',   en:'Light Rain',    key:'rain' },
+  snow:    { cn:'飘雪',   en:'Snow',          key:'snow' },
+  thunder: { cn:'雷阵雨', en:'Thunderstorm',  key:'storm' },
+  mist:    { cn:'薄雾',   en:'Mist',          key:'mist' },
+  night:   { cn:'晴夜',   en:'Clear Night',   key:'night' }
+};
+
+/* ============================================================
+   2. City library (~30) — mock, self-consistent local times
+   ============================================================ */
+const CITIES = [
+  { id:'beijing',   cn:'北京',       en:'Beijing',      py:'beijing',       ab:'bj', w:'sunny',   t:29, hi:33, lo:21, hm:38, wd:2.6, lt:'14:19' },
+  { id:'shanghai',  cn:'上海',       en:'Shanghai',     py:'shanghai',      ab:'sh', w:'rain',    t:24, hi:27, lo:21, hm:88, wd:4.1, lt:'14:19' },
+  { id:'guangzhou', cn:'广州',       en:'Guangzhou',    py:'guangzhou',     ab:'gz', w:'cloudy',  t:31, hi:34, lo:26, hm:76, wd:2.2, lt:'14:19' },
+  { id:'shenzhen',  cn:'深圳',       en:'Shenzhen',     py:'shenzhen',      ab:'sz', w:'thunder', t:27, hi:31, lo:25, hm:90, wd:5.4, lt:'14:19' },
+  { id:'chengdu',   cn:'成都',       en:'Chengdu',      py:'chengdu',       ab:'cd', w:'mist',    t:22, hi:26, lo:19, hm:82, wd:1.1, lt:'14:19' },
+  { id:'chongqing', cn:'重庆',       en:'Chongqing',    py:'chongqing',     ab:'cq', w:'mist',    t:26, hi:30, lo:23, hm:85, wd:0.9, lt:'14:19' },
+  { id:'hangzhou',  cn:'杭州',       en:'Hangzhou',     py:'hangzhou',      ab:'hz', w:'sunny',   t:30, hi:35, lo:24, hm:58, wd:1.8, lt:'14:19' },
+  { id:'xian',      cn:'西安',       en:"Xi'an",        py:'xian',          ab:'xa', w:'cloudy',  t:27, hi:32, lo:20, hm:45, wd:3.0, lt:'14:19' },
+  { id:'nanjing',   cn:'南京',       en:'Nanjing',      py:'nanjing',       ab:'nj', w:'rain',    t:23, hi:26, lo:20, hm:91, wd:3.6, lt:'14:19' },
+  { id:'wuhan',     cn:'武汉',       en:'Wuhan',        py:'wuhan',         ab:'wh', w:'thunder', t:26, hi:30, lo:23, hm:86, wd:4.8, lt:'14:19' },
+  { id:'suzhou',    cn:'苏州',       en:'Suzhou',       py:'suzhou',        ab:'sz', w:'sunny',   t:29, hi:34, lo:23, hm:64, wd:1.5, lt:'14:19' },
+  { id:'xiamen',    cn:'厦门',       en:'Xiamen',       py:'xiamen',        ab:'xm', w:'sunny',   t:30, hi:33, lo:26, hm:70, wd:3.9, lt:'14:19' },
+  { id:'lhasa',     cn:'拉萨',       en:'Lhasa',        py:'lasa',          ab:'ls', w:'sunny',   t:18, hi:24, lo:9,  hm:32, wd:2.4, lt:'14:19' },
+  { id:'harbin',    cn:'哈尔滨',     en:'Harbin',       py:'haerbin',       ab:'heb',w:'snow',    t:-8, hi:-3, lo:-14,hm:66, wd:3.2, lt:'14:19' },
+  { id:'hongkong',  cn:'香港',       en:'Hong Kong',    py:'xianggang',     ab:'xg', w:'cloudy',  t:30, hi:32, lo:27, hm:80, wd:4.4, lt:'14:19' },
+  { id:'tokyo',     cn:'东京',       en:'Tokyo',        py:'dongjing',      ab:'dj', w:'sunny',   t:28, hi:32, lo:24, hm:72, wd:3.3, lt:'15:19' },
+  { id:'seoul',     cn:'首尔',       en:'Seoul',        py:'shouer',        ab:'se', w:'rain',    t:23, hi:26, lo:20, hm:88, wd:2.9, lt:'15:19' },
+  { id:'singapore', cn:'新加坡',     en:'Singapore',    py:'xinjiapo',      ab:'xjp',w:'thunder', t:29, hi:32, lo:26, hm:89, wd:2.1, lt:'14:19' },
+  { id:'bangkok',   cn:'曼谷',       en:'Bangkok',      py:'mangu',         ab:'mg', w:'cloudy',  t:32, hi:35, lo:27, hm:78, wd:1.7, lt:'13:19' },
+  { id:'dubai',     cn:'迪拜',       en:'Dubai',        py:'dibai',         ab:'db', w:'sunny',   t:41, hi:45, lo:34, hm:22, wd:3.8, lt:'10:19' },
+  { id:'cairo',     cn:'开罗',       en:'Cairo',        py:'kailuo',        ab:'kl', w:'sunny',   t:36, hi:40, lo:27, hm:18, wd:3.2, lt:'08:19' },
+  { id:'mumbai',    cn:'孟买',       en:'Mumbai',       py:'mengmai',       ab:'mm', w:'thunder', t:28, hi:31, lo:26, hm:92, wd:5.9, lt:'11:49' },
+  { id:'london',    cn:'伦敦',       en:'London',       py:'lundun',        ab:'ld', w:'mist',    t:15, hi:19, lo:11, hm:84, wd:2.0, lt:'07:19' },
+  { id:'paris',     cn:'巴黎',       en:'Paris',        py:'bali',          ab:'bl', w:'night',   t:14, hi:20, lo:11, hm:68, wd:2.4, lt:'02:14' },
+  { id:'berlin',    cn:'柏林',       en:'Berlin',       py:'bolin',         ab:'bl', w:'cloudy',  t:20, hi:25, lo:14, hm:63, wd:3.1, lt:'08:19' },
+  { id:'rome',      cn:'罗马',       en:'Rome',         py:'luoma',         ab:'lm', w:'sunny',   t:30, hi:34, lo:22, hm:44, wd:1.9, lt:'08:19' },
+  { id:'moscow',    cn:'莫斯科',     en:'Moscow',       py:'mosike',        ab:'msk',w:'rain',    t:17, hi:21, lo:13, hm:77, wd:3.5, lt:'09:19' },
+  { id:'zurich',    cn:'苏黎世',     en:'Zurich',       py:'sulishi',       ab:'sls',w:'snow',    t:-2, hi:1,  lo:-6, hm:74, wd:2.2, lt:'08:19' },
+  { id:'oslo',      cn:'奥斯陆',     en:'Oslo',         py:'aosilu',        ab:'asl',w:'snow',    t:0,  hi:3,  lo:-5, hm:70, wd:2.8, lt:'08:19' },
+  { id:'reykjavik', cn:'雷克雅未克', en:'Reykjavik',    py:'leikeyaweike',  ab:'lkywk',w:'snow',  t:1,  hi:4,  lo:-2, hm:81, wd:5.2, lt:'06:19' },
+  { id:'newyork',   cn:'纽约',       en:'New York',     py:'niuyue',        ab:'ny', w:'night',   t:22, hi:27, lo:18, hm:66, wd:2.7, lt:'02:19' },
+  { id:'losangeles',cn:'洛杉矶',     en:'Los Angeles',  py:'luoshanji',     ab:'lsj',w:'night',   t:20, hi:26, lo:17, hm:72, wd:1.6, lt:'23:19' },
+  { id:'vancouver', cn:'温哥华',     en:'Vancouver',    py:'wengehua',      ab:'wgh',w:'rain',    t:15, hi:18, lo:12, hm:86, wd:3.4, lt:'23:19' },
+  { id:'sydney',    cn:'悉尼',       en:'Sydney',       py:'xini',          ab:'xn', w:'sunny',   t:19, hi:23, lo:12, hm:55, wd:4.6, lt:'16:19' }
+];
+
+const CITY = Object.fromEntries(CITIES.map(c => [c.id, c]));
+
+/* ============================================================
+   3. i18n
+   ============================================================ */
+const T = {
+  zh: {
+    ph:'搜索城市 · 中文或英文…',
+    hi:'最高', lo:'最低', hm:'湿度', wd:'风速',
+    local:'当地',
+    add:'添加', remove:'移除城市',
+    emptyTitle:'这里还没有天空',
+    emptyHint:'在上方输入城市名，把它们的天空带进来',
+    noResult:'没有匹配的城市',
+    tAdd:'已把 {c} 的天空挂上来',
+    tDel:'已收起 {c} 的天空',
+    tDup:'{c} 已经在这儿了',
+    tMax:'同时最多展示 12 座城市',
+    tFull:'城市库里没有更多了',
+    langBtn:'EN', langTip:'Switch to English',
+    unit:'m/s'
+  },
+  en: {
+    ph:'Search a city · 中文 or English…',
+    hi:'High', lo:'Low', hm:'Humidity', wd:'Wind',
+    local:'Local',
+    add:'Add', remove:'Remove city',
+    emptyTitle:'No skies yet',
+    emptyHint:'Type a city above to bring its sky in',
+    noResult:'No matching city',
+    tAdd:'Added {c} sky',
+    tDel:'Removed {c}',
+    tDup:'{c} is already here',
+    tMax:'12 cities at most',
+    tFull:'No more cities in the library',
+    langBtn:'中', langTip:'切换为中文',
+    unit:'m/s'
+  }
+};
+
+const state = {
+  lang:'zh',
+  /* six different skies on first paint: 晴 / 雨 / 雷 / 雪 / 雾 / 夜 */
+  cities:['beijing','shanghai','shenzhen','harbin','london','paris'],
+  seen:new Set()
+};
+const MAX = 12;
+const $  = s => document.querySelector(s);
+const L  = () => T[state.lang];
+const lab = c => state.lang === 'zh' ? c.cn : c.en;
+
+/* ============================================================
+   4. Seeded RNG — stable scenes per city
+   ============================================================ */
+function hash(str){
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function rng(seed){
+  let s = seed >>> 0 || 7;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5;  s >>>= 0;
+    return s / 4294967296;
+  };
+}
+const f = n => (+n).toFixed(2);
+
+/* ============================================================
+   5. Scene builders
+   ============================================================ */
+function sunSVG(cx, cy){
+  let rays = '';
+  for (let i = 0; i < 12; i++){
+    const a = (i / 12) * Math.PI * 2;
+    const r1 = 27, r2 = i % 2 ? 33 : 37;
+    rays += `<line x1="${f(cx + Math.cos(a) * r1)}" y1="${f(cy + Math.sin(a) * r1)}" x2="${f(cx + Math.cos(a) * r2)}" y2="${f(cy + Math.sin(a) * r2)}"/>`;
+  }
+  return `<g class="sun">
+    <circle class="glow" cx="${cx}" cy="${cy}" r="54" fill="url(#sunG)" style="transform-origin:${cx}px ${cy}px"/>
+    <g class="rays" style="transform-origin:${cx}px ${cy}px">${rays}</g>
+    <circle cx="${cx}" cy="${cy}" r="21" fill="#ffd77a"/>
+    <circle cx="${cx}" cy="${cy}" r="21" fill="none" stroke="#f2ae4c" stroke-width="2.4" opacity=".85"/>
+  </g>`;
+}
+
+function moonSVG(cx, cy){
+  return `<g class="moon">
+    <circle class="mglow" cx="${cx}" cy="${cy}" r="50" fill="url(#moonG)" style="transform-origin:${cx}px ${cy}px"/>
+    <g class="mbody" style="transform-origin:${cx}px ${cy}px">
+      <circle cx="${cx}" cy="${cy}" r="23" fill="#fdf4d7"/>
+      <circle cx="${cx - 9}" cy="${cy - 6}" r="4.6" fill="#e8dcb6" opacity=".9"/>
+      <circle cx="${cx + 7}" cy="${cy + 4}" r="6.2" fill="#e8dcb6" opacity=".7"/>
+      <circle cx="${cx - 3}" cy="${cy + 11}" r="3" fill="#e8dcb6" opacity=".6"/>
+      <circle cx="${cx}" cy="${cy}" r="23" fill="none" stroke="#f0e4bd" stroke-width="1.6" opacity=".7"/>
+    </g>
+  </g>`;
+}
+
+function paleSunSVG(cx, cy){
+  return `<g>
+    <circle cx="${cx}" cy="${cy}" r="42" fill="url(#paleG)"/>
+    <circle cx="${cx}" cy="${cy}" r="16" fill="#fffaea" opacity=".95"/>
+  </g>`;
+}
+
+function hillsSVG(){
+  return `<g class="hills">
+    <path style="fill:var(--hill2)" d="M0 150 L0 120C60 104 96 127 152 117 212 106 252 126 302 115 342 107 374 121 400 110 L400 150Z"/>
+    <path style="fill:var(--hill1)" d="M0 150 L0 133C70 121 112 140 170 129 226 119 270 137 322 129 354 124 378 133 400 127 L400 150Z"/>
+  </g>`;
+}
+
+/* Clouds: explicit bands (zones) + evenly spread phase offsets */
+function cloudLayer(bands, seed, shapes){
+  const r = rng(seed);
+  const n = bands.length;
+  return bands.map((b, i) => {
+    const dur = b.dur * (0.9 + r() * 0.2);
+    const ph  = -dur * ((i + 0.5) / n + (r() * 0.08));
+    const shp = shapes[(i + (seed % 3)) % shapes.length];
+    return `<div class="cloud" style="--top:${b.top};--w:${b.w};--op:${b.op};--dur:${f(dur)}s;--ph:${f(ph)}s">
+      <svg viewBox="0 -8 220 108" aria-hidden="true"><use href="#${shp}"/></svg>
+    </div>`;
+  }).join('');
+}
+
+function rainFX(n, seed){
+  const r = rng(seed); let s = '';
+  for (let i = 0; i < n; i++){
+    s += `<i class="drop" style="left:${f(r() * 104 - 2)}%;height:${(9 + r() * 11).toFixed(0)}px;
+      animation-duration:${f(0.55 + r() * 0.5)}s;animation-delay:${f(-r() * 2)}s;opacity:${f(0.32 + r() * 0.45)}"></i>`;
+  }
+  return `<div class="fx">${s}</div>`;
+}
+
+function snowFX(n, seed){
+  const r = rng(seed); let s = '';
+  for (let i = 0; i < n; i++){
+    const sz = (3 + r() * 5).toFixed(1);
+    s += `<i class="flake" style="left:${f(r() * 100)}%;width:${sz}px;height:${sz}px;--sw:${f((r() - 0.5) * 26)}px;
+      animation-duration:${f(5 + r() * 6)}s;animation-delay:${f(-r() * 10)}s;opacity:${f(0.55 + r() * 0.45)}"></i>`;
+  }
+  return `<div class="fx">${s}</div>`;
+}
+
+function starFX(n, seed){
+  const r = rng(seed); let s = '';
+  for (let i = 0; i < n; i++){
+    const spark = r() < 0.22;
+    const sz = spark ? (7 + r() * 4).toFixed(1) : (1.6 + r() * 2).toFixed(1);
+    s += `<i class="star${spark ? ' spark' : ''}" style="left:${f(r() * 98)}%;top:${f(r() * 72)}%;--s:${sz}px;
+      --d:${f(2 + r() * 3.4)}s;animation-delay:${f(-r() * 5)}s;opacity:${f(0.4 + r() * 0.6)}"></i>`;
+  }
+  s += `<i class="shoot" style="left:12%;top:14%;--ph:-3s"></i>`;
+  s += `<i class="shoot" style="left:52%;top:6%;--ph:-8.5s;width:48px"></i>`;
+  return `<div class="fx">${s}</div>`;
+}
+
+function mistFX(seed){
+  const r = rng(seed);
+  const rows = [ {t:'52%',h:'20px',o:'.55'}, {t:'68%',h:'26px',o:'.7'}, {t:'82%',h:'22px',o:'.6'}, {t:'40%',h:'16px',o:'.4'} ];
+  return `<div class="fx">${rows.map((b, i) =>
+    `<i class="band" style="--top:${b.t};--h:${b.h};--op:${b.o};--dur:${f(14 + r() * 10)}s;--ph:${f(-r() * 12)}s"></i>`
+  ).join('')}</div>`;
+}
+
+function moteFX(n, seed){
+  const r = rng(seed); let s = '';
+  for (let i = 0; i < n; i++){
+    const sz = (3 + r() * 5).toFixed(1);
+    s += `<i class="mote" style="left:${f(r() * 96)}%;width:${sz}px;height:${sz}px;--mx:${f((r() - 0.5) * 40)}px;
+      --dur:${f(6 + r() * 6)}s;--ph:${f(-r() * 12)}s"></i>`;
+  }
+  return `<div class="fx">${s}</div>`;
+}
+
+const SHAPES = ['cld-a', 'cld-b', 'cld-c'];
+
+function sceneHTML(c){
+  const seed = hash(c.id);
+  const r = rng(seed);
+  const parts = ['<div class="sky"></div>'];
+  const art = [];
+
+  switch (c.w){
+    case 'sunny':
+      art.push(sunSVG(118, 52));
+      break;
+    case 'night':
+      art.push(moonSVG(300, 42));
+      break;
+    case 'mist':
+      art.push(paleSunSVG(300, 44));
+      break;
+    case 'thunder':
+      art.push(`<g class="bolt" style="--dur:${f(5.6 + r() * 3.4)}s;--ph:${f(-r() * 8)}s">
+        <use href="#bolt" x="196" y="34" width="52" height="86" fill="#ffe9a0" opacity=".95"/>
+        <use href="#bolt" x="200" y="34" width="52" height="86" fill="#fff8d8" opacity=".7"/>
+      </g>`);
+      break;
+  }
+  art.push(hillsSVG());
+  parts.push(`<svg class="art" viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${art.join('')}</svg>`);
+
+  /* cloud bands — each weather gets its own zone layout */
+  const B = {
+    sunny:   [ {top:'46%', w:'44%', op:'.92', dur:82}, {top:'63%', w:'33%', op:'.6',  dur:104} ],
+    cloudy:  [ {top:'12%', w:'38%', op:'.5',  dur:118}, {top:'29%', w:'50%', op:'.88', dur:88},
+               {top:'47%', w:'43%', op:'.95', dur:70},  {top:'64%', w:'35%', op:'.62', dur:96} ],
+    rain:    [ {top:'8%',  w:'46%', op:'.55', dur:96},  {top:'24%', w:'56%', op:'.9',  dur:74},
+               {top:'41%', w:'42%', op:'.7',  dur:88} ],
+    snow:    [ {top:'10%', w:'42%', op:'.6',  dur:112}, {top:'28%', w:'50%', op:'.85', dur:90},
+               {top:'46%', w:'38%', op:'.55', dur:104} ],
+    thunder: [ {top:'6%',  w:'54%', op:'.85', dur:78},  {top:'22%', w:'62%', op:'.95', dur:62},
+               {top:'38%', w:'46%', op:'.8',  dur:84} ],
+    mist:    [ {top:'16%', w:'46%', op:'.35', dur:130}, {top:'34%', w:'52%', op:'.3',  dur:150} ],
+    night:   [ {top:'54%', w:'46%', op:'.5',  dur:120}, {top:'70%', w:'34%', op:'.38', dur:140} ]
+  };
+  parts.push(cloudLayer(B[c.w], seed + 11, SHAPES));
+
+  /* particles */
+  if (c.w === 'rain')    parts.push(rainFX(26, seed + 3));
+  if (c.w === 'thunder') parts.push(rainFX(32, seed + 3));
+  if (c.w === 'snow')    parts.push(snowFX(22, seed + 5));
+  if (c.w === 'night')   parts.push(starFX(34, seed + 7));
+  if (c.w === 'mist')    parts.push(mistFX(seed + 9));
+  if (c.w === 'sunny')   parts.push(moteFX(10, seed + 13));
+  if (c.w === 'cloudy')  parts.push(moteFX(5, seed + 17));
+
+  if (c.w === 'thunder') parts.push('<div class="flash"></div>');
+
+  parts.push(`<span class="local">${L().local} ${c.lt}</span>`);
+  return parts.join('');
+}
+
+/* ============================================================
+   6. Icons
+   ============================================================ */
+const ICON = {
+  hi:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 14.8V4a2 2 0 10-4 0v10.8a4.5 4.5 0 104 0z"/></svg>`,
+  lo:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13.2V4a2 2 0 114 0v9.2a4.5 4.5 0 11-4 0z" opacity=".55"/></svg>`,
+  hm:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3.5s5.5 5.8 5.5 9.4a5.5 5.5 0 11-11 0C6.5 9.3 12 3.5 12 3.5z"/></svg>`,
+  wd:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h11a3 3 0 100-3"/><path d="M3 13h15a3 3 0 110 3"/><path d="M3 18h8"/></svg>`
+};
+
+/* ============================================================
+   7. Render
+   ============================================================ */
+const grid = $('#grid');
+
+function cardHTML(c, i){
+  const w = W[c.w];
+  const t = L();
+  const fresh = !state.seen.has(c.id);
+  return `<article class="card${fresh ? ' is-new' : ''}" data-w="${c.w}" data-id="${c.id}" style="--i:${i}"
+            tabindex="0" aria-label="${c.cn} ${c.en} ${t.hi} ${c.hi}">
+    <div class="scene">${sceneHTML(c)}</div>
+    <div class="body">
+      <div class="row-top">
+        <div class="who">
+          <h3 class="city-cn">${c.cn}</h3>
+          <p class="city-en">${c.en}</p>
+        </div>
+        <div class="temp">${c.t}<span class="deg">°</span></div>
+      </div>
+      <p class="cond"><span class="cond-cn">${w.cn}</span><span class="dot">·</span><span class="cond-en">${w.en}</span></p>
+      <ul class="meta">
+        <li>${ICON.hi}<span class="k">${t.hi}</span><b>${c.hi}°</b></li>
+        <li>${ICON.lo}<span class="k">${t.lo}</span><b>${c.lo}°</b></li>
+        <li>${ICON.hm}<span class="k">${t.hm}</span><b>${c.hm}%</b></li>
+        <li>${ICON.wd}<span class="k">${t.wd}</span><b>${c.wd} ${t.unit}</b></li>
+      </ul>
+    </div>
+    <button class="del" data-act="del" title="${t.remove}" aria-label="${t.remove} · ${c.cn}">✕</button>
+  </article>`;
+}
+
+function emptyHTML(){
+  const t = L();
+  return `<div class="empty">
+    <svg viewBox="0 0 120 70" fill="none" aria-hidden="true">
+      <path d="M28 62C15 62 9 50 17 42 11 30 24 18 37 22 40 5 60 -2 74 8 82 -4 103 -3 110 11 122 6 138 18 133 32 148 36 147 58 130 60" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-dasharray="7 6"/>
+      <circle cx="42" cy="52" r="3" fill="currentColor"/><circle cx="60" cy="58" r="3" fill="currentColor"/>
+      <circle cx="78" cy="52" r="3" fill="currentColor"/><circle cx="96" cy="58" r="3" fill="currentColor"/>
+    </svg>
+    <h3>${t.emptyTitle}</h3>
+    <p>${t.emptyHint}</p>
+  </div>`;
+}
+
+/* Pause off-screen scenes for performance */
+let io = null;
+function observeCards(){
+  if (!('IntersectionObserver' in window)) return;
+  if (io) io.disconnect();
+  io = new IntersectionObserver(entries => {
+    entries.forEach(e => e.target.classList.toggle('paused', !e.isIntersecting));
+  }, { rootMargin:'120px' });
+  grid.querySelectorAll('.card').forEach(el => io.observe(el));
+}
+
+function render(){
+  grid.innerHTML = state.cities.length
+    ? state.cities.map((id, i) => cardHTML(CITY[id], i)).join('')
+    : emptyHTML();
+  state.cities.forEach(id => state.seen.add(id));
+  observeCards();
+}
+
+/* ============================================================
+   8. Toast
+   ============================================================ */
+const toastWrap = $('#toasts');
+function toast(msg){
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  toastWrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => { el.classList.remove('in'); setTimeout(() => el.remove(), 340); }, 2200);
+}
+const tmpl = (s, kv) => s.replace(/\{c\}/g, kv.c);
+
+/* ============================================================
+   9. Ripple
+   ============================================================ */
+grid.addEventListener('pointerdown', e => {
+  const card = e.target.closest('.card');
+  if (!card || e.target.closest('.del')) return;
+  const r = card.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 2.2;
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  s.style.cssText = `left:${e.clientX - r.left}px;top:${e.clientY - r.top}px;width:${size}px;height:${size}px`;
+  card.appendChild(s);
+  setTimeout(() => s.remove(), 700);
+});
+
+/* ============================================================
+   10. Add / remove
+   ============================================================ */
+function addCity(id){
+  const c = CITY[id];
+  if (!c) return;
+  if (state.cities.includes(id)){ toast(tmpl(L().tDup, { c: lab(c) })); return; }
+  if (state.cities.length >= MAX){ toast(L().tMax); return; }
+  state.cities.push(id);
+  render();
+  toast(tmpl(L().tAdd, { c: lab(c) }));
+}
+
+function removeCity(id){
+  const c = CITY[id];
+  const el = grid.querySelector(`.card[data-id="${id}"]`);
+  const done = () => {
+    state.cities = state.cities.filter(x => x !== id);
+    state.seen.delete(id);
+    render();
+    toast(tmpl(L().tDel, { c: lab(c) }));
+  };
+  const softMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (el && !softMotion){
+    el.classList.add('leaving');
+    setTimeout(done, 260);
+  } else done();
+}
+
+grid.addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  if (e.target.closest('.del')){
+    e.stopPropagation();
+    removeCity(card.dataset.id);
+  }
+});
+grid.addEventListener('keydown', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  if (e.key === 'Delete' || e.key === 'Backspace'){
+    e.preventDefault();
+    removeCity(card.dataset.id);
+  }
+});
+
+/* ============================================================
+   11. Search + suggestions
+   ============================================================ */
+const q = $('#q');
+const sug = $('#suggest');
+let sugList = [];
+let sugIdx = -1;
+
+function matchCities(term){
+  const s = term.trim().toLowerCase();
+  if (!s) return [];
+  const shown = new Set(state.cities);
+  return CITIES
+    .filter(c => !shown.has(c.id))
+    .map(c => {
+      const cn = c.cn.toLowerCase();
+      const en = c.en.toLowerCase();
+      let score = -1;
+      if (cn.startsWith(s)) score = 0;
+      else if (en.startsWith(s)) score = 1;
+      else if (c.ab.startsWith(s)) score = 2;
+      else if (c.py.startsWith(s)) score = 3;
+      else if (cn.includes(s) || en.includes(s)) score = 4;
+      else if (c.py.includes(s)) score = 5;
+      return { c, score };
+    })
+    .filter(x => x.score >= 0)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 6)
+    .map(x => x.c);
+}
+
+function esc(s){ return s.replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m])); }
+function mark(text, term){
+  const i = text.toLowerCase().indexOf(term.toLowerCase());
+  if (i < 0 || !term.trim()) return esc(text);
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + term.length)) + '</mark>' + esc(text.slice(i + term.length));
+}
+
+function drawSuggest(){
+  const term = q.value.trim();
+  sugList = matchCities(term);
+  sugIdx = -1;
+  if (!term){ closeSuggest(); return; }
+  if (!sugList.length){
+    sug.innerHTML = `<li class="empty" role="option">${L().noResult}</li>`;
+  } else {
+    sug.innerHTML = sugList.map((c, i) => {
+      const name = state.lang === 'zh'
+        ? `${mark(c.cn, term)} <span class="s-en">${esc(c.en)}</span>`
+        : `${mark(c.en, term)} <span class="s-en">${esc(c.cn)}</span>`;
+      return `<li role="option" data-i="${i}">${name}<span class="s-w">${W[c.w].cn} · ${W[c.w].en}</span></li>`;
+    }).join('');
+  }
+  sug.hidden = false;
+  q.setAttribute('aria-expanded', 'true');
+}
+function closeSuggest(){ sug.hidden = true; q.setAttribute('aria-expanded', 'false'); sugIdx = -1; }
+
+function move(d){
+  if (!sugList.length) return;
+  sugIdx = (sugIdx + d + sugList.length) % sugList.length;
+  [...sug.children].forEach((li, i) => li.classList.toggle('on', i === sugIdx));
+}
+
+q.addEventListener('input', drawSuggest);
+q.addEventListener('focus', () => { if (q.value.trim()) drawSuggest(); });
+q.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown'){ e.preventDefault(); move(1); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); move(-1); }
+  else if (e.key === 'Enter'){
+    e.preventDefault();
+    const pick = sugIdx >= 0 ? sugList[sugIdx] : matchCities(q.value)[0];
+    if (pick) addCity(pick.id);
+    q.value = ''; closeSuggest(); q.blur();
+  }
+  else if (e.key === 'Escape'){ closeSuggest(); q.blur(); }
+});
+sug.addEventListener('mousedown', e => e.preventDefault());
+sug.addEventListener('click', e => {
+  const li = e.target.closest('li[data-i]');
+  if (!li) return;
+  addCity(sugList[+li.dataset.i].id);
+  q.value = ''; closeSuggest();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search')) closeSuggest();
+});
+
+/* ============================================================
+   12. Language toggle
+   ============================================================ */
+const langBtn = $('#lang');
+langBtn.addEventListener('click', () => {
+  state.lang = state.lang === 'zh' ? 'en' : 'zh';
+  document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
+  syncLang();
+  render();
+});
+function syncLang(){
+  const t = L();
+  q.placeholder = t.ph;
+  langBtn.textContent = t.langBtn;
+  langBtn.title = t.langTip;
+  langBtn.setAttribute('aria-label', t.langTip);
+}
+
+/* ============================================================
+   13. Boot
+   ============================================================ */
+syncLang();
+render();
+</script>
+</body>
+</html>
